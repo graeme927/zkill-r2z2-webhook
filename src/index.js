@@ -220,9 +220,9 @@ async function buildActivity(
     matchedParticipants: describedMatches,
     totalValue: Number(record?.zkb?.totalValue || 0),
     thumbnailTypeId:
-      describedMatches.length === 1 && describedMatches[0].shipTypeId
-        ? describedMatches[0].shipTypeId
-        : describedVictim?.shipTypeId || 0
+    describedMatches.find(
+    (participant) => participant.shipTypeId > 0
+  )?.shipTypeId || describedVictim?.shipTypeId || 0
   };
 }
 
