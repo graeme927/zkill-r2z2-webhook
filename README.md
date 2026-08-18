@@ -1,91 +1,69 @@
 # zKill R2Z2 Discord Webhook Bot
 
-A lightweight Discord webhook service that monitors the zKillboard R2Z2 killmail stream and posts filtered EVE Online activity directly into Discord.
+A small Docker bot that watches the live zKillboard R2Z2 feed and sends matching killmails to Discord.
 
-Supports:
+You can track:
 
-- Character filtering
-- Corporation filtering
-- Alliance filtering
-- Region filtering
-- Multiple filter rules
-- Different Discord webhooks for different rules
-- Loss, final blow and assist detection
-- Persistent duplicate prevention
-- Docker deployment
-- Clean Discord embeds
+- specific characters;
+- corporations;
+- alliances;
+- regions;
+- **kills only**, **losses only**, or **both**;
+- multiple completely separate filters, each with its own Discord webhook.
+
+The bot also remembers where it is in the R2Z2 stream, so restarts do not normally cause duplicate or historical posts.
 
 ---
 
-# Features
+## Quick start
 
-- Reads the live zKillboard R2Z2 killmail stream
-- Checks the victim and every attacker
-- Detects losses, final blows and assists
-- Filters by character, corporation, alliance and region
-- Supports multiple independent filter rules
-- Sends each filter rule to its own Discord webhook
-- Prevents duplicate posts across restarts
-- Resolves names, ships, systems and regions through ESI
-- Saves the current stream position in `data/state.json`
-- Docker-first deployment
+If Docker is already installed, this is the whole install:
 
----
+```bash
+git clone https://github.com/graeme927/zkill-r2z2-webhook.git
+cd zkill-r2z2-webhook
 
-# Requirements
+cp .env.example .env
+nano .env
 
-- A Linux server or VPS
-- Git
-- Docker
-- Docker Compose
-- A Discord webhook URL
+mkdir -p data
 
-You do not need to install Node.js or run `npm install` manually when using Docker.
+docker compose up -d --build
+docker logs -f zkill-discord-bot
+```
+
+The important part is the `.env` file. That is where you tell the bot **what to watch** and **where to post it**.
 
 ---
 
-# Installation
+# 1. What you need
 
-## 1. Install Git and Docker
+You need:
 
-Update the server:
+- a Linux server or VPS;
+- Git;
+- Docker and Docker Compose;
+- at least one Discord webhook.
+
+You **do not** need to install Node.js or run `npm install` yourself when using Docker.
+
+### Installing Docker on Ubuntu/Debian
+
+If Docker is not already installed:
 
 ```bash
 sudo apt update
-sudo apt upgrade -y
-```
-
-Install Git and curl:
-
-```bash
 sudo apt install -y git curl
-```
 
-Install Docker:
-
-```bash
 curl -fsSL https://get.docker.com | sudo sh
-```
-
-Enable Docker:
-
-```bash
 sudo systemctl enable --now docker
-```
 
-Add your user to the Docker group:
-
-```bash
 sudo usermod -aG docker $USER
 ```
 
-Log out and reconnect so the group change takes effect:
+Log out and back in after the last command.
 
-```bash
-exit
-```
-
-After reconnecting, confirm Docker is installed:
+Then check:
 
 ```bash
 docker --version
@@ -94,40 +72,36 @@ docker compose version
 
 ---
 
-## 2. Clone the Repository
+# 2. Download the bot
 
 ```bash
 git clone https://github.com/graeme927/zkill-r2z2-webhook.git
-```
-
-Move into the project directory:
-
-```bash
 cd zkill-r2z2-webhook
 ```
 
----
-
-## 3. Configure the Environment
-
-Copy the example environment file:
+Create your private configuration:
 
 ```bash
 cp .env.example .env
-```
-
-Edit it:
-
-```bash
 nano .env
 ```
 
-A basic character filter looks like this:
+Never put your real Discord webhook in `.env.example`. Use `.env`.
+
+---
+
+# 3. Create your first filter
+
+A filter is simply a numbered block in `.env`.
+
+This example watches two characters and posts **both their kills and losses**:
 
 ```env
 FILTER_1_NAME=Tracked Pilots
 FILTER_1_ENABLED=true
-FILTER_1_WEBHOOK=https://discord.com/api/webhooks/WEBHOOK_ID/WEBHOOK_TOKEN
+FILTER_1_WEBHOOK=https://discord.com/api/webhooks/YOUR_WEBHOOK
+
+FILTER_1_ACTIVITY=BOTH
 FILTER_1_PARTICIPANT_MATCH=ANY
 
 FILTER_1_CHARACTER_IDS=90783972,1906205970
@@ -143,254 +117,503 @@ FILTER_1_REGION_IDS=
 FILTER_1_REGION_NAMES=
 ```
 
-Set a descriptive user agent near the bottom of the file:
+That is enough for a working character tracker.
+
+---
+
+# 4. Choose kills, losses, or both
+
+Each filter now has:
 
 ```env
-USER_AGENT=My-zKill-R2Z2-Bot/3.0 contact@example.com
+FILTER_1_ACTIVITY=BOTH
 ```
 
-The remaining defaults can normally stay unchanged:
+Valid options are:
+
+| Value | What it means |
+|---|---|
+| `BOTH` | Show the tracked entity as an attacker **or** victim |
+| `KILLS` | Only show killmails where the tracked entity is an attacker |
+| `LOSSES` | Only show killmails where the tracked entity is the victim |
+
+### Example: losses only
 
 ```env
-ESI_COMPATIBILITY_DATE=
-R2Z2_SUCCESS_DELAY_MS=100
-R2Z2_IDLE_DELAY_MS=6000
-REQUEST_ERROR_DELAY_MS=15000
-DEBUG=false
+FILTER_2_NAME=Titan Loss Watch
+FILTER_2_ENABLED=true
+FILTER_2_WEBHOOK=https://discord.com/api/webhooks/YOUR_WEBHOOK
+
+FILTER_2_ACTIVITY=LOSSES
+FILTER_2_PARTICIPANT_MATCH=ANY
+
+FILTER_2_CHARACTER_IDS=CHARACTER_ID_1,CHARACTER_ID_2
 ```
 
-Save and close nano:
-
-```text
-Ctrl+O
-Enter
-Ctrl+X
-```
-
-Do not add spaces around the `=` sign.
-
-Correct:
+### Example: alliance kills only
 
 ```env
-FILTER_1_ENABLED=true
+FILTER_3_NAME=Alliance Kills
+FILTER_3_ENABLED=true
+FILTER_3_WEBHOOK=https://discord.com/api/webhooks/YOUR_WEBHOOK
+
+FILTER_3_ACTIVITY=KILLS
+FILTER_3_PARTICIPANT_MATCH=ANY
+
+FILTER_3_ALLIANCE_IDS=ALLIANCE_ID
 ```
 
-Incorrect:
+`KILLS` includes both final blows and assists. If the tracked entity appears anywhere on the attacker side of the killmail, it matches.
+
+---
+
+# 5. Other things you can track
+
+You can use IDs or exact names.
+
+IDs are recommended for permanent rules because names can change.
+
+## Character
 
 ```env
-FILTER_1_ENABLED = true
+FILTER_1_CHARACTER_IDS=90783972,1906205970
+```
+
+or:
+
+```env
+FILTER_1_CHARACTER_NAMES=Graeme Edwardson,MajorJenkins
+```
+
+## Corporation
+
+```env
+FILTER_1_CORPORATION_IDS=CORPORATION_ID
+```
+
+or:
+
+```env
+FILTER_1_CORPORATION_NAMES=Corporation Name
+```
+
+## Alliance
+
+```env
+FILTER_1_ALLIANCE_IDS=ALLIANCE_ID
+```
+
+or:
+
+```env
+FILTER_1_ALLIANCE_NAMES=Alliance Name
+```
+
+## Region
+
+```env
+FILTER_1_REGION_NAMES=Delve
+```
+
+Multiple values are comma separated:
+
+```env
+FILTER_1_REGION_NAMES=Delve,Querious
+```
+
+A region can be used to narrow another filter.
+
+For example, this means:
+
+> Show kills involving this alliance, but only in Delve.
+
+```env
+FILTER_1_ACTIVITY=KILLS
+FILTER_1_ALLIANCE_IDS=ALLIANCE_ID
+FILTER_1_REGION_NAMES=Delve
+```
+
+A **region-only** rule watches all killmails in that region, so it must use:
+
+```env
+FILTER_1_ACTIVITY=BOTH
 ```
 
 ---
 
-## 4. Create the Data Directory
+# 6. Multiple filters and multiple webhooks
+
+Add as many numbered filters as you need:
+
+```env
+FILTER_1_...
+FILTER_2_...
+FILTER_3_...
+```
+
+Each one can have a completely different webhook.
+
+Example:
+
+```env
+# Characters -> one Discord channel
+FILTER_1_NAME=Pilot Watchlist
+FILTER_1_ENABLED=true
+FILTER_1_WEBHOOK=https://discord.com/api/webhooks/AAA/AAA
+FILTER_1_ACTIVITY=BOTH
+FILTER_1_CHARACTER_IDS=90783972,1906205970
+
+# Alliance losses -> another Discord channel
+FILTER_2_NAME=Alliance Losses
+FILTER_2_ENABLED=true
+FILTER_2_WEBHOOK=https://discord.com/api/webhooks/BBB/BBB
+FILTER_2_ACTIVITY=LOSSES
+FILTER_2_ALLIANCE_IDS=ALLIANCE_ID
+
+# Corp kills in Delve -> a third Discord channel
+FILTER_3_NAME=Delve Corp Kills
+FILTER_3_ENABLED=true
+FILTER_3_WEBHOOK=https://discord.com/api/webhooks/CCC/CCC
+FILTER_3_ACTIVITY=KILLS
+FILTER_3_CORPORATION_IDS=CORPORATION_ID
+FILTER_3_REGION_NAMES=Delve
+```
+
+If the same killmail matches two different filters, both filters can send a message.
+
+---
+
+# 7. What does PARTICIPANT_MATCH do?
+
+For most setups, leave this as:
+
+```env
+FILTER_1_PARTICIPANT_MATCH=ANY
+```
+
+### ANY
+
+If you configure both:
+
+```env
+FILTER_1_CHARACTER_IDS=123
+FILTER_1_CORPORATION_IDS=456
+```
+
+then `ANY` means:
+
+> character 123 **OR** anyone from corporation 456.
+
+### ALL
+
+```env
+FILTER_1_PARTICIPANT_MATCH=ALL
+```
+
+means the **same person** must satisfy every populated participant filter.
+
+For example:
+
+```env
+FILTER_1_CHARACTER_IDS=123
+FILTER_1_CORPORATION_IDS=456
+FILTER_1_PARTICIPANT_MATCH=ALL
+```
+
+means:
+
+> character 123, but only while they are in corporation 456.
+
+If you are unsure, use `ANY`.
+
+---
+
+# 8. Start the bot
+
+Create the persistent data directory:
 
 ```bash
 mkdir -p data
 ```
 
-The bot stores its persistent state in:
-
-```text
-data/state.json
-```
-
----
-
-## 5. Build and Start
+Build and start:
 
 ```bash
-docker compose up --build -d
+docker compose up -d --build
 ```
 
-The Docker image installs the required Node dependency automatically.
-
-You do not need to run:
-
-```bash
-npm install
-```
-
----
-
-## 6. View the Logs
+Watch the logs:
 
 ```bash
 docker logs -f zkill-discord-bot
 ```
 
-A successful startup should look similar to:
+A healthy startup looks similar to:
 
 ```text
 ===================================
 zKILL R2Z2 MULTI-FILTER BOT
-Rules: 1
-  [1] Tracked Pilots: 2 character(s) (participant ANY)
-Next sequence: 123456789
+Rules: 2
+  [1] MJ Tracking: 2 character(s) (participant ANY, activity BOTH)
+  [2] Titan Loss Watch: 8 character(s) (participant ANY, activity LOSSES)
+Next sequence: 98970000
 ===================================
 ```
 
-When the bot reaches the live end of the stream:
+When caught up:
 
 ```text
-[WAIT] No sequence 123456789 yet; waiting for new killmails.
+[WAIT] No sequence 98970000 yet; waiting for new killmails.
 ```
 
-When a filter matches:
+When something matches:
 
 ```text
-[POSTED] ASSIST 137100000 • MajorJenkins in C-J6MT • Harpy
+[POSTED] 137100000 • MJ Tracking • Turnur • 2 matched participant(s)
 ```
 
-Press `Ctrl+C` to stop following the logs.
-
-The container continues running.
+Press `Ctrl+C` to stop viewing the logs. The bot keeps running.
 
 ---
 
-# Creating a Discord Webhook
+# 9. Discord message behaviour
 
-In Discord:
+The embed includes:
 
-1. Open the channel where messages should be posted.
-2. Open **Edit Channel**.
-3. Open **Integrations**.
-4. Open **Webhooks**.
-5. Create a new webhook.
-6. Copy the webhook URL.
-7. Paste it into `FILTER_n_WEBHOOK`.
+- filter name;
+- system and region;
+- kill value;
+- victim;
+- ship lost;
+- final blow;
+- matched tracked participants;
+- the ship each matched participant was flying;
+- a zKillboard link.
 
-Example:
+The image in the top-right uses the ship flown by the **first matched participant**.
 
-```env
-FILTER_1_WEBHOOK=https://discord.com/api/webhooks/WEBHOOK_ID/WEBHOOK_TOKEN
+If no participant is available, such as a region-only rule, it falls back to the victim's ship.
+
+---
+
+# 10. Changing a filter
+
+Edit:
+
+```bash
+nano .env
 ```
 
-Treat webhook URLs as passwords.
+Then recreate the container so it reloads `.env`:
 
----
-
-# Environment Variables
-
-## Filter Variables
-
-| Variable | Required | Description |
-|---|---:|---|
-| `FILTER_n_NAME` | Yes | Name shown for the rule |
-| `FILTER_n_ENABLED` | Yes | Enables or disables the rule |
-| `FILTER_n_WEBHOOK` | Yes | Discord webhook for the rule |
-| `FILTER_n_PARTICIPANT_MATCH` | No | `ANY` or `ALL` |
-| `FILTER_n_CHARACTER_IDS` | No | Comma-separated character IDs |
-| `FILTER_n_CHARACTER_NAMES` | No | Comma-separated character names |
-| `FILTER_n_CORPORATION_IDS` | No | Comma-separated corporation IDs |
-| `FILTER_n_CORPORATION_NAMES` | No | Comma-separated corporation names |
-| `FILTER_n_ALLIANCE_IDS` | No | Comma-separated alliance IDs |
-| `FILTER_n_ALLIANCE_NAMES` | No | Comma-separated alliance names |
-| `FILTER_n_REGION_IDS` | No | Comma-separated region IDs |
-| `FILTER_n_REGION_NAMES` | No | Comma-separated region names |
-
-Replace `n` with the rule number:
-
-```env
-FILTER_1_NAME=Tracked Pilots
-FILTER_2_NAME=Delve Activity
-FILTER_3_NAME=Alliance Activity
+```bash
+docker compose up -d --force-recreate
 ```
 
-Rule numbers do not need to be consecutive.
+You do not normally need a full rebuild just for `.env` changes.
 
----
+Check the loaded rules:
 
-## Service Variables
-
-| Variable | Required | Default | Description |
-|---|---:|---:|---|
-| `USER_AGENT` | Yes | — | Identifies the bot |
-| `ESI_COMPATIBILITY_DATE` | No | Empty | Optional ESI compatibility date |
-| `R2Z2_SUCCESS_DELAY_MS` | No | `100` | Delay between successful stream requests |
-| `R2Z2_IDLE_DELAY_MS` | No | `6000` | Delay when no new sequence exists |
-| `REQUEST_ERROR_DELAY_MS` | No | `15000` | Delay after a request error |
-| `DEBUG` | No | `false` | Enables additional logging |
-
----
-
-# Filter Examples
-
-## Character Filter
-
-```env
-FILTER_1_NAME=Tracked Pilots
-FILTER_1_ENABLED=true
-FILTER_1_WEBHOOK=https://discord.com/api/webhooks/AAA/AAA
-FILTER_1_PARTICIPANT_MATCH=ANY
-
-FILTER_1_CHARACTER_IDS=90783972,1906205970
-FILTER_1_CHARACTER_NAMES=
-
-FILTER_1_CORPORATION_IDS=
-FILTER_1_CORPORATION_NAMES=
-
-FILTER_1_ALLIANCE_IDS=
-FILTER_1_ALLIANCE_NAMES=
-
-FILTER_1_REGION_IDS=
-FILTER_1_REGION_NAMES=
+```bash
+docker logs -f zkill-discord-bot
 ```
 
 ---
 
-## Corporation Filter
+# 11. Updating the bot
 
-```env
-FILTER_2_NAME=Corporation Activity
-FILTER_2_ENABLED=true
-FILTER_2_WEBHOOK=https://discord.com/api/webhooks/BBB/BBB
-FILTER_2_PARTICIPANT_MATCH=ANY
+From the project directory:
 
-FILTER_2_CHARACTER_IDS=
-FILTER_2_CHARACTER_NAMES=
+```bash
+git pull
+docker compose up -d --build --force-recreate
+docker logs -f zkill-discord-bot
+```
 
-FILTER_2_CORPORATION_IDS=CORPORATION_ID
-FILTER_2_CORPORATION_NAMES=
+**Do not delete `data/state.json` when updating.**
 
-FILTER_2_ALLIANCE_IDS=
-FILTER_2_ALLIANCE_NAMES=
+That file remembers where the bot is in R2Z2 and which filter/killmail combinations have already been posted.
 
-FILTER_2_REGION_IDS=
-FILTER_2_REGION_NAMES=
+---
+
+# 12. Updating an existing install manually
+
+If you downloaded a ZIP instead of using `git pull`:
+
+1. Stop the bot:
+
+   ```bash
+   docker compose down
+   ```
+
+2. Keep these two things from your existing install:
+
+   ```text
+   .env
+   data/state.json
+   ```
+
+3. Replace the project files with the new version.
+
+4. Put your existing `.env` and `data/state.json` back.
+
+5. Rebuild:
+
+   ```bash
+   docker compose up -d --build --force-recreate
+   ```
+
+6. Check the logs:
+
+   ```bash
+   docker logs -f zkill-discord-bot
+   ```
+
+Older `.env` files continue to work because `FILTER_n_ACTIVITY` defaults to `BOTH` when it is missing.
+
+---
+
+# 13. Useful commands
+
+### Check status
+
+```bash
+docker compose ps
+```
+
+### View logs
+
+```bash
+docker logs -f zkill-discord-bot
+```
+
+### Last 100 log lines
+
+```bash
+docker logs --tail 100 zkill-discord-bot
+```
+
+### Restart
+
+```bash
+docker compose restart
+```
+
+### Stop
+
+```bash
+docker compose down
+```
+
+### Start
+
+```bash
+docker compose up -d
 ```
 
 ---
 
-## Alliance Filter
+# 14. Resetting the bot
+
+Normally, **do not do this**.
+
+If you deliberately want a completely fresh R2Z2 starting point:
+
+```bash
+docker compose down
+rm -f data/state.json
+docker compose up -d --build
+docker logs -f zkill-discord-bot
+```
+
+Deleting `state.json` makes the bot forget its previous stream position and posted-message history.
+
+---
+
+# 15. Troubleshooting
+
+## Container immediately exits
+
+```bash
+docker logs zkill-discord-bot
+```
+
+Common causes:
+
+- webhook missing or invalid;
+- no enabled filters;
+- typo in an EVE name;
+- invalid ID;
+- invalid `FILTER_n_ACTIVITY`;
+- malformed `.env`.
+
+## `.env` change did nothing
+
+Recreate the container:
+
+```bash
+docker compose up -d --force-recreate
+```
+
+## Docker permission denied
+
+```bash
+sudo usermod -aG docker $USER
+```
+
+Then log out and back in.
+
+## Docker build hangs around npm
+
+This version uses the public npm registry in `package-lock.json` and `npm ci`.
+
+To see detailed build output:
+
+```bash
+docker compose build --no-cache --progress=plain
+```
+
+Test npm from Docker:
+
+```bash
+docker run --rm node:22-alpine npm ping
+```
+
+## No Discord messages
+
+Temporarily enable:
 
 ```env
-FILTER_3_NAME=Alliance Activity
-FILTER_3_ENABLED=true
-FILTER_3_WEBHOOK=https://discord.com/api/webhooks/CCC/CCC
-FILTER_3_PARTICIPANT_MATCH=ANY
+DEBUG=true
+```
 
-FILTER_3_CHARACTER_IDS=
-FILTER_3_CHARACTER_NAMES=
+Then:
 
-FILTER_3_CORPORATION_IDS=
-FILTER_3_CORPORATION_NAMES=
+```bash
+docker compose up -d --force-recreate
+docker logs -f zkill-discord-bot
+```
 
-FILTER_3_ALLIANCE_IDS=ALLIANCE_ID
-FILTER_3_ALLIANCE_NAMES=
+Also check that the rule's `ACTIVITY` is what you intended:
 
-FILTER_3_REGION_IDS=
-FILTER_3_REGION_NAMES=
+```env
+BOTH
+KILLS
+LOSSES
 ```
 
 ---
 
-## Region Filter
+# 16. Full filter template
+
+Copy this block when adding another rule:
 
 ```env
-FILTER_4_NAME=Regional Activity
+FILTER_4_NAME=My New Filter
 FILTER_4_ENABLED=true
-FILTER_4_WEBHOOK=https://discord.com/api/webhooks/DDD/DDD
+FILTER_4_WEBHOOK=https://discord.com/api/webhooks/WEBHOOK_ID/WEBHOOK_TOKEN
+
+FILTER_4_ACTIVITY=BOTH
 FILTER_4_PARTICIPANT_MATCH=ANY
 
 FILTER_4_CHARACTER_IDS=
@@ -403,399 +626,21 @@ FILTER_4_ALLIANCE_IDS=
 FILTER_4_ALLIANCE_NAMES=
 
 FILTER_4_REGION_IDS=
-FILTER_4_REGION_NAMES=Delve,Querious
+FILTER_4_REGION_NAMES=
 ```
+
+At least one character, corporation, alliance, or region filter must contain something.
 
 ---
 
-## Alliance Activity in Delve
+## Credits
 
-```env
-FILTER_5_NAME=Alliance Activity in Delve
-FILTER_5_ENABLED=true
-FILTER_5_WEBHOOK=https://discord.com/api/webhooks/EEE/EEE
-FILTER_5_PARTICIPANT_MATCH=ANY
+Uses:
 
-FILTER_5_CHARACTER_IDS=
-FILTER_5_CHARACTER_NAMES=
+- zKillboard R2Z2;
+- EVE Online ESI;
+- Discord webhooks;
+- Node.js;
+- Docker.
 
-FILTER_5_CORPORATION_IDS=
-FILTER_5_CORPORATION_NAMES=
-
-FILTER_5_ALLIANCE_IDS=ALLIANCE_ID
-FILTER_5_ALLIANCE_NAMES=
-
-FILTER_5_REGION_IDS=
-FILTER_5_REGION_NAMES=Delve
-```
-
----
-
-# Matching Behaviour
-
-## Lists Use OR Matching
-
-```env
-FILTER_1_REGION_NAMES=Delve,Querious
-```
-
-This matches Delve or Querious.
-
-The same applies to character, corporation and alliance lists.
-
----
-
-## Participant Match: ANY
-
-```env
-FILTER_1_CHARACTER_IDS=123
-FILTER_1_CORPORATION_IDS=456
-FILTER_1_PARTICIPANT_MATCH=ANY
-```
-
-This matches:
-
-- character `123`; or
-- any victim or attacker from corporation `456`.
-
----
-
-## Participant Match: ALL
-
-```env
-FILTER_1_CHARACTER_IDS=123
-FILTER_1_CORPORATION_IDS=456
-FILTER_1_PARTICIPANT_MATCH=ALL
-```
-
-This matches only when the same participant:
-
-- is character `123`; and
-- belongs to corporation `456`.
-
----
-
-## Region Filters
-
-Region filters restrict the location of the rule.
-
-```env
-FILTER_1_ALLIANCE_IDS=1354830081
-FILTER_1_REGION_NAMES=Delve
-```
-
-This matches activity involving the alliance, but only in Delve.
-
-A rule containing only a region filter matches every killmail in that region.
-
----
-
-# Multiple Webhooks
-
-Each filter can use a different webhook:
-
-```env
-FILTER_1_WEBHOOK=https://discord.com/api/webhooks/AAA/AAA
-FILTER_2_WEBHOOK=https://discord.com/api/webhooks/BBB/BBB
-FILTER_3_WEBHOOK=https://discord.com/api/webhooks/CCC/CCC
-```
-
-When one killmail matches several rules, each matching rule sends a message to its own webhook.
-
-If several matching rules use the same webhook, that channel receives one message from each matching rule.
-
----
-
-# Running
-
-Build and start:
-
-```bash
-docker compose up --build -d
-```
-
-View logs:
-
-```bash
-docker logs -f zkill-discord-bot
-```
-
-Stop:
-
-```bash
-docker compose down
-```
-
-Restart:
-
-```bash
-docker compose restart
-```
-
-Check status:
-
-```bash
-docker compose ps
-```
-
----
-
-# Changing Filters
-
-Edit `.env`:
-
-```bash
-nano .env
-```
-
-Recreate the container:
-
-```bash
-docker compose up -d --force-recreate
-```
-
-Check the logs:
-
-```bash
-docker logs -f zkill-discord-bot
-```
-
-A full rebuild is not normally required for `.env` changes.
-
----
-
-# Updating
-
-Move into the project directory:
-
-```bash
-cd zkill-r2z2-webhook
-```
-
-Pull the latest code:
-
-```bash
-git pull
-```
-
-Rebuild and recreate:
-
-```bash
-docker compose up --build -d --force-recreate
-```
-
-View the logs:
-
-```bash
-docker logs -f zkill-discord-bot
-```
-
-Do not delete `data/state.json` during a normal update.
-
----
-
-# Data Persistence
-
-State is stored in:
-
-```text
-data/state.json
-```
-
-This contains:
-
-- the current R2Z2 sequence;
-- the activation time;
-- delivered rule and killmail combinations.
-
-The `data` directory is mounted into the container, so state survives rebuilds.
-
-Delete the state only when deliberately resetting the bot.
-
----
-
-# Resetting
-
-Stop the bot:
-
-```bash
-docker compose down
-```
-
-Delete the state:
-
-```bash
-rm -f data/state.json
-```
-
-Start again:
-
-```bash
-docker compose up --build -d
-```
-
-View the logs:
-
-```bash
-docker logs -f zkill-discord-bot
-```
-
-This creates a new baseline at the current R2Z2 position.
-
----
-
-# Project Structure
-
-```text
-.
-├── src/
-│   ├── config.js
-│   ├── discord.js
-│   ├── esi.js
-│   ├── filters.js
-│   ├── index.js
-│   ├── r2z2.js
-│   └── state.js
-│
-├── data/
-│   └── state.json
-│
-├── Dockerfile
-├── docker-compose.yml
-├── package.json
-├── package-lock.json
-├── .env.example
-└── README.md
-```
-
----
-
-# Running Without Docker
-
-Docker is recommended.
-
-To run directly, install Node.js 22 and then:
-
-```bash
-git clone https://github.com/graeme927/zkill-r2z2-webhook.git
-cd zkill-r2z2-webhook
-cp .env.example .env
-nano .env
-npm install --omit=dev --no-audit --no-fund
-npm start
-```
-
----
-
-# Troubleshooting
-
-## Docker Permission Error
-
-```bash
-sudo usermod -aG docker $USER
-```
-
-Log out and reconnect.
-
----
-
-## Container Exits Immediately
-
-```bash
-docker logs zkill-discord-bot
-```
-
-Check for:
-
-- missing webhook;
-- no enabled filter;
-- invalid `.env` formatting;
-- invalid EVE IDs or names.
-
----
-
-## `.env` Changes Are Not Loading
-
-```bash
-docker compose up -d --force-recreate
-```
-
----
-
-## Docker Build Is Slow
-
-```bash
-docker compose build --no-cache --progress=plain
-```
-
-Test npm from Docker:
-
-```bash
-docker run --rm node:22-alpine npm ping
-```
-
----
-
-## State File Permission Error
-
-```bash
-mkdir -p data
-chmod u+rwx data
-docker compose up -d --force-recreate
-```
-
----
-
-## No Discord Messages
-
-Check:
-
-- the filter is enabled;
-- the webhook is valid;
-- the participant matches the rule;
-- the region restriction matches;
-- the bot is at the live R2Z2 position;
-- the killmail happened after activation.
-
-Enable debug logging:
-
-```env
-DEBUG=true
-```
-
-Recreate and inspect:
-
-```bash
-docker compose up -d --force-recreate
-docker logs -f zkill-discord-bot
-```
-
----
-
-## Duplicate Messages
-
-Do not delete:
-
-```text
-data/state.json
-```
-
-Also check whether several enabled filters match the same killmail and use the same webhook.
-
----
-
-# Credits
-
-Built using:
-
-- zKillboard R2Z2
-- EVE Online ESI
-- Discord Webhooks
-- Node.js
-- Docker
-
----
-
-# Disclaimer
-
-This is an independent community project and is not affiliated with CCP Games, Discord or zKillboard.
+This is an independent community project and is not affiliated with CCP Games, Discord, or zKillboard.

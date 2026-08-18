@@ -36,6 +36,18 @@ function normaliseRuleKey(index) {
   return `FILTER_${index}`;
 }
 
+function parseActivity(value, prefix) {
+  const activity = String(value || "BOTH").trim().toUpperCase();
+
+  if (!["BOTH", "KILLS", "LOSSES"].includes(activity)) {
+    throw new Error(
+      `${prefix}_ACTIVITY must be BOTH, KILLS, or LOSSES`
+    );
+  }
+
+  return activity;
+}
+
 function buildNumberedRules() {
   const indexes = new Set();
 
@@ -73,6 +85,10 @@ function buildNumberedRules() {
           process.env[`${prefix}_WEBHOOK`] || ""
         ).trim(),
         participantMatch,
+        activity: parseActivity(
+          process.env[`${prefix}_ACTIVITY`],
+          prefix
+        ),
         characterIds: parseIdList(
           process.env[`${prefix}_CHARACTER_IDS`]
         ),
@@ -121,6 +137,7 @@ function buildLegacyRule() {
     enabled: true,
     webhook,
     participantMatch: "ANY",
+    activity: "BOTH",
     characterIds,
     characterNames,
     corporationIds: [],
@@ -169,6 +186,13 @@ for (const rule of rules) {
       `${rule.envPrefix} has no character, corporation, alliance, or region filters`
     );
   }
+
+  if (!hasParticipantFilter && rule.activity !== "BOTH") {
+    throw new Error(
+      `${rule.envPrefix}_ACTIVITY=${rule.activity} requires a character, ` +
+        "corporation, or alliance filter. Region-only rules must use BOTH."
+    );
+  }
 }
 
 if (rules.length === 0) {
@@ -183,7 +207,7 @@ const config = {
   rules,
   userAgent:
     String(process.env.USER_AGENT || "").trim() ||
-    "UKCorp-zKill-R2Z2-Bot/3.0",
+    "UKCorp-zKill-R2Z2-Bot/3.1",
   esiCompatibilityDate: String(
     process.env.ESI_COMPATIBILITY_DATE || ""
   ).trim(),

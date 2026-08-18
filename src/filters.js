@@ -31,7 +31,23 @@ export function buildParticipants(record) {
   return participants;
 }
 
+export function activityMatchesRule(participant, rule) {
+  if (rule.activity === "KILLS") {
+    return participant.side === "ATTACKER";
+  }
+
+  if (rule.activity === "LOSSES") {
+    return participant.side === "VICTIM";
+  }
+
+  return true;
+}
+
 export function participantMatchesRule(participant, rule) {
+  if (!activityMatchesRule(participant, rule)) {
+    return false;
+  }
+
   const tests = [];
 
   if (rule.characterIdSet.size > 0) {

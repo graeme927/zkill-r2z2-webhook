@@ -219,10 +219,15 @@ async function buildActivity(
     finalBlow: describedFinalBlow,
     matchedParticipants: describedMatches,
     totalValue: Number(record?.zkb?.totalValue || 0),
+
+    // Prefer the ship flown by the first participant matched by this rule.
+    // Fall back to the victim's ship for region-only rules or missing ship data.
     thumbnailTypeId:
-    describedMatches.find(
-    (participant) => participant.shipTypeId > 0
-  )?.shipTypeId || describedVictim?.shipTypeId || 0
+      describedMatches.find(
+        (participant) => participant.shipTypeId > 0
+      )?.shipTypeId ||
+      describedVictim?.shipTypeId ||
+      0
   };
 }
 
@@ -284,7 +289,7 @@ async function main() {
   for (const rule of rules) {
     console.log(
       `  [${rule.id}] ${rule.name}: ${describeRule(rule)} ` +
-        `(participant ${rule.participantMatch})`
+        `(participant ${rule.participantMatch}, activity ${rule.activity})`
     );
   }
 
